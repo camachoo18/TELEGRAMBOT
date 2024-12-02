@@ -71,6 +71,51 @@ async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Ocurrió un error al ejecutar el comando: {e}")
 
 
+# Define el comando /sentimiento
+async def sentimiento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.args:
+        await update.message.reply_text("Por favor, proporciona un texto para analizar el sentimiento. Ejemplo: /sentimiento Estoy muy feliz hoy")
+        return
+
+    # Combinar los argumentos en un solo texto
+    input_text = " ".join(context.args)
+
+    # Enviar la solicitud a la API de Hugging Face
+    API_KEY = os.getenv("HUGGINGFACE_API_KEY")
+    API_URL = "https://api-inference.huggingface.co/models/cardiffnlp/twitter-roberta-base-sentiment-latest"
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+
+    payload = {"inputs": input_text}
+    try:
+        response = requests.post(API_URL, headers=headers, json=payload)
+        response.raise_for_status()  # Lanza una excepción si ocurre un error HTTP
+
+        output = response.json()
+
+        # Verificar si la respuesta contiene la estructura esperada
+        if isinstance(output, list) and len(output) > 0 and isinstance(output[0], list) and len(output[0]) > 0:
+            # Obtener la lista de sentimientos y puntajes
+            sentiment_scores = output[0]
+            
+            # Ordenar los sentimientos por puntaje (de mayor a menor)
+            sentiment_scores.sort(key=lambda x: x['score'], reverse=True)
+            
+            # Obtener el sentimiento con el puntaje más alto
+            top_sentiment = sentiment_scores[0]
+            label = top_sentiment['label']
+            score = top_sentiment['score']
+
+            # Crear una respuesta basada en el sentimiento
+            sentimiento_texto = {
+                "positive": "El sentimiento es mayormente **positivo**.",
+                "neutral": "El sentimiento es **neutral**.",
+                "negative": "El sentimiento es mayormente **negativo**."
+            }.get(label, "Sentimiento desconocido.")
+            await update.message.reply_text(f"{sentimiento_texto} (Confianza: {score:.2f})")
+        else:
+            await update.message.reply_text("No se pudo analizar el sentimiento del texto proporcionado.")
+    except Exception as e:
+        await update.message.reply_text(f"Error al analizar el sentimiento: {e}")
 
 
 # Define el comando /suma
@@ -127,6 +172,7 @@ def main():
 
     # Registra los comandos
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("sentimiento", sentimiento))
     application.add_handler(CommandHandler("goku", goku))
     application.add_handler(CommandHandler("saludo", saludo))
     application.add_handler(CommandHandler("ping", ping))
